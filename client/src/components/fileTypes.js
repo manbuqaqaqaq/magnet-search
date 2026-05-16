@@ -99,3 +99,34 @@ export function detectMultipleTypes(title) {
   if (!title) return [];
   return TYPE_RULES.filter((rule) => rule.patterns.some((pat) => pat.test(title))).map((r) => ({ type: r.type, icon: r.icon, color: r.color }));
 }
+
+// 内容大类 → 文件类型映射
+const CATEGORY_MAP = {
+  "影视": ["视频", "字幕", "ISO/镜像"],
+  "书籍": ["电子书", "图片"],
+  "软件": ["软件", "游戏", "压缩包"],
+  "音乐": ["音频"],
+};
+
+export const CONTENT_CATEGORIES = ["全部", "影视", "书籍", "软件", "音乐"];
+
+// 判断标题是否属于指定内容大类
+export function matchesCategory(title, category) {
+  if (!title || category === "全部") return true;
+  const types = CATEGORY_MAP[category];
+  if (!types) return true;
+  return TYPE_RULES.some(
+    (rule) => types.includes(rule.type) && rule.patterns.some((pat) => pat.test(title))
+  );
+}
+
+// 获取标题的内容大类（用于排序加权）
+export function getCategory(title) {
+  if (!title) return null;
+  for (const [cat, types] of Object.entries(CATEGORY_MAP)) {
+    if (TYPE_RULES.some((rule) => types.includes(rule.type) && rule.patterns.some((pat) => pat.test(title)))) {
+      return cat;
+    }
+  }
+  return null;
+}

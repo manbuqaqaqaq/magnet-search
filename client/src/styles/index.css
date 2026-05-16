@@ -124,6 +124,10 @@ body::before {
   .result-list { -webkit-overflow-scrolling: touch; }
 }
 
+/* Hide scrollbar for horizontal scroll tabs */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
 /* === Mobile magnet action highlight === */
 @keyframes pulse-download {
   0%, 100% { box-shadow: 0 0 0 0 rgba(0, 229, 160, 0.3); }

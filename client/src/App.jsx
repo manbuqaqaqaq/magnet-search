@@ -6,6 +6,8 @@ import ThemeToggle from "./components/ThemeToggle.jsx";
 import Pagination from "./components/Pagination.jsx";
 import FilterBar from "./components/FilterBar.jsx";
 import FavoritesList from "./components/FavoritesList.jsx";
+import ContentTypeTabs from "./components/ContentTypeTabs.jsx";
+import { matchesCategory } from "./components/fileTypes.js";
 import { search, searchStream, fetchSources } from "./api.js";
 import { addToHistory } from "./components/SearchHistory.jsx";
 
@@ -37,6 +39,7 @@ export default function App() {
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [sourceProgress, setSourceProgress] = useState(null); // { name: "loading"|"done"|"error", count, time }
   const [streamingResults, setStreamingResults] = useState(null); // 流式中间结果
+  const [contentCategory, setContentCategory] = useState("全部"); // 内容类型过滤
   const streamRef = useRef(null);
   const inputRef = useRef(null);
   const hasSearched = useRef(false);
@@ -128,6 +131,32 @@ export default function App() {
     setPage(newPage); if (query.trim()) doSearch(query.trim(), sort, newPage);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [query, sort, doSearch]);
+
+  // 前端内容类型过滤 + 排序优化（不修改后端逻辑）
+  const displayResults = (() => {
+    const raw = streamingResults || results;
+    if (!raw) return null;
+    if (contentCategory === "全部") return raw;
+
+    const filtered = raw.results.filter((r) => matchesCategory(r.title, contentCategory));
+
+    // 书籍模式：按文件大小倒排（小文件优先，典型的电子书就几MB）
+    let sorted = filtered;
+    if (contentCategory === "书籍") {
+      sorted = [...filtered].sort((a, b) => {
+        const sa = a.seeders || 0;
+        const sb = b.seeders || 0;
+        // 有做种 > 未知 > 无做种
+        if (sa > 0 && sb > 0) return sb - sa;
+        if (sa > 0) return -1;
+        if (sb > 0) return 1;
+        // 都没做种数据：小文件优先（电子书越来越小）
+        return (a.size || 0) - (b.size || 0);
+      });
+    }
+
+    return { ...raw, total: sorted.length, results: sorted, totalPages: Math.ceil(sorted.length / raw.pageSize), contentFiltered: true };
+  })();
 
   const reset = useCallback(() => {
     setQuery(""); setResults(null); setStatus("idle"); setError(""); setPage(1);
@@ -222,7 +251,8 @@ export default function App() {
 
         {status !== "idle" && (
           <>
-            <SortTabs active={sort} onChange={handleSortChange} count={(streamingResults || results)?.total} />
+            <ContentTypeTabs active={contentCategory} onChange={setContentCategory} />
+            <SortTabs active={sort} onChange={handleSortChange} count={displayResults?.total} />
             {/* 源加载状态条 */}
             {sourceProgress && Object.keys(sourceProgress).length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5 mb-4">
@@ -248,7 +278,7 @@ export default function App() {
             <ResultList
               status={status}
               error={error}
-              results={streamingResults || results}
+              results={displayResults}
               onRetry={handleSubmit}
               sourceCount={availableSources.length}
               activeSources={filters.sources}
@@ -256,8 +286,16 @@ export default function App() {
               query={query}
               selectedIndex={selectedIndex}
               streaming={!!streamingResults}
+              contentCategory={contentCategory}
             />
-            {status === "done" && results && <Pagination page={results.page} totalPages={results.totalPages} onPageChange={handlePageChange} />}
+            {status === "done" && results && displayResults && !displayResults.contentFiltered && (
+              <Pagination page={results.page} totalPages={results.totalPages} onPageChange={handlePageChange} />
+            )}
+            {status === "done" && displayResults?.contentFiltered && (
+              <p className="text-center text-xs text-dim mt-8">
+                已按「{contentCategory}」类型过滤，显示 {displayResults.total} 条结果
+              </p>
+            )}
           </>
         )}
       </main>
