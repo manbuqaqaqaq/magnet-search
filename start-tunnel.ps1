@@ -10,7 +10,7 @@ Write-Host ""
 
 # 1. 构建前端
 Write-Host "[1/3] 构建前端..." -ForegroundColor Yellow
-Set-Location "C:\Users\Administrator\magnet-search"
+Set-Location "D:\Claude_Project\magnet-search"
 npm run build
 Write-Host "  前端构建完成" -ForegroundColor Green
 
@@ -37,7 +37,7 @@ Write-Host "  cloudflared 路径: $cfPath" -ForegroundColor Gray
 
 # 启动后端（后台）
 $serverJob = Start-Job -Name "magnet-server" -ScriptBlock {
-    Set-Location "C:\Users\Administrator\magnet-search\server"
+    Set-Location "D:\Claude_Project\magnet-search\server"
     $env:ACCESS_TOKEN = "magnet-search-2024"
     node src/index.js
 }

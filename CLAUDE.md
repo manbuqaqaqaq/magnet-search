@@ -32,7 +32,7 @@ magnet URI 是 IETF 标准化的开放协议（RFC 未强制编号，但属于 B
 ## 开发方式
 
 ```bash
-cd C:/Users/Administrator/magnet-search
+cd D:/Claude_Project/magnet-search
 npm run dev          # 同时启动前后端 (server:3001, client:5173)
 npm run dev:server   # 仅后端，3001 端口
 npm run dev:client   # 仅前端，5173 端口
