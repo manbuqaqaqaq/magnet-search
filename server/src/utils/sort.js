@@ -188,6 +188,20 @@ function heatSort(a, b) {
   return 0;
 }
 
+// 判断字符串是否包含 CJK 字符
+function hasCJK(str) {
+  for (const ch of str) {
+    const code = ch.codePointAt(0);
+    if ((code >= 0x4E00 && code <= 0x9FFF) ||
+        (code >= 0x3400 && code <= 0x4DBF) ||
+        (code >= 0x3040 && code <= 0x30FF) ||
+        (code >= 0xAC00 && code <= 0xD7AF)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // 对多条查询取最高相关度得分（适配中英文双路搜索）
 function maxRelevanceScore(title, queries) {
   if (!Array.isArray(queries)) {
@@ -195,14 +209,21 @@ function maxRelevanceScore(title, queries) {
   }
   let best = 0;
   let hasCollectionQuery = false;
+  let hasCJKQuery = false;
   for (const q of queries) {
     if (q.includes("合集") || q.includes("全集")) hasCollectionQuery = true;
+    if (hasCJK(q)) hasCJKQuery = true;
     const s = relevanceScore(title, q);
     if (s > best) best = s;
   }
   // 合集/全集 加分：标题中有 "全X集" 模式且任一查询包含 合集/全集 关键词
   if (/全\d*集/.test(title) && hasCollectionQuery) {
     best += 8;
+  }
+  // CJK 查询 + CJK 标题加分：用户输入中文时优先展示中文资源
+  // 跳过完全匹配（标题=查询本身，说明没有额外信息）
+  if (hasCJKQuery && hasCJK(title) && best >= 50 && best < 100) {
+    best += 6;
   }
   return best;
 }
