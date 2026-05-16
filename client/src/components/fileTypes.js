@@ -4,10 +4,22 @@ const TYPE_RULES = [
     icon: "🎬",
     color: "#38bdf8",
     patterns: [
-      /\b(mp4|mkv|avi|mov|wmv|flv|webm|m4v|ts|m2ts)\b/i,
-      /\b(720p|1080p|2160p|4k|8k|bluray|bdrip|brrip|web-dl|webrip|hdtv|dvdrip)\b/i,
-      /\b(h\.?264|h\.?265|x264|x265|hevc|avc|av1|vp9)\b/i,
-      /\b(remux|imax|hdr|dolby.vision|sdr|hdr10\+?)\b/i,
+      // 文件格式（放宽边界：.mp4/.mkv 可能跟在 . 后面）
+      /(?:^|[.\s\-([])(mp4|mkv|avi|mov|wmv|flv|webm|m4v|ts|m2ts)(?:\b|[.\s\-)\]])/i,
+      // 分辨率/画质（放宽边界：BD1080P 中 D1 紧邻，WEB-DLRip 中 DLR 紧邻）
+      /(720p|1080p|2160p|4k|8k|bluray|bdrip|brrip|web.dl|webrip|hdtv|dvdrip|remux|imax|hdr|dolby.vision|sdr)/i,
+      // 编码格式
+      /(h\.?264|h\.?265|x264|x265|hevc|avc|av1|vp9)\b/i,
+      // 中文字幕/压制组（强视频信号）
+      /(中字|简繁|繁体|字幕组|人人影视|Mp4Ba|CMCT|Adans|CHS|CHT|Cantonese|6[vV]电影|HDChina|HDCTV|MTeam)/,
+      // 中文视频描述词
+      /(第[一二三四五六七八九\d]+[季部集話話话]|全\d+集|剧场版|OVA\b|OAD\b|WEB.DL|NF\.WEB|Netflix|AMZN\.WEB)/i,
+      // 季集模式
+      /\bS\d{2}\b/i,
+      /\bSeason\s*\d+/i,
+      /\bE(?:P)?\d{2,3}\b/i,
+      /(国语|粤语|日语|英语|普通话|台配|双语|多语)/,
+      /\bep(?:isode)?\s*\d+/i,
     ],
   },
   {
@@ -43,7 +55,9 @@ const TYPE_RULES = [
     color: "#fb923c",
     patterns: [
       /\b(pdf|epub|mobi|azw3?|djvu|cbr|cbz|lit|fb2)\b/i,
-      /\b(ebook|电子书|漫画|manga|comic)\b/i,
+      /\b(ebook|电子书|漫画|manga|comic|manhua|manhwa)\b/i,
+      /(?:^|\s)v\d{1,2}[-.]\d{1,2}\b/i,        // v01-53 漫画卷数
+      /\(\s*Digital\s*\)/i,                         // (Digital) 数字漫画
     ],
   },
   {
