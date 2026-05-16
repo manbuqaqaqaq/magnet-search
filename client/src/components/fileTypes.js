@@ -14,12 +14,19 @@ const TYPE_RULES = [
       /(中字|简繁|繁体|字幕组|人人影视|Mp4Ba|CMCT|Adans|CHS|CHT|Cantonese|6[vV]电影|HDChina|HDCTV|MTeam)/,
       // 中文视频描述词
       /(第[一二三四五六七八九\d]+[季部集話話话]|全\d+集|剧场版|OVA\b|OAD\b|WEB.DL|NF\.WEB|Netflix|AMZN\.WEB)/i,
+      // 集数表达：110-220集 / 1-720 / 110-220話 / 全X话
+      /\b\d+\s*[-–—to至~]\s*\d+\s*[集話话]/,
+      /\b\d+\s*[集話话]\b/,
+      // 纯数字范围（如 1-720、110-220），常见于动漫/影视合辑
+      /\b\d{1,4}\s*[-–—]\s*\d{2,4}\b/,
       // 季集模式
       /\bS\d{2}\b/i,
       /\bSeason\s*\d+/i,
       /\bE(?:P)?\d{2,3}\b/i,
       /(国语|粤语|日语|英语|普通话|台配|双语|多语)/,
       /\bep(?:isode)?\s*\d+/i,
+      // 片源标识：台三DVD/DVDrip/TVrip
+      /(台三DVD|DVDrip\b|TVrip\b|TV\.rip|BDRip\b|BD\.rip)/i,
     ],
   },
   {
