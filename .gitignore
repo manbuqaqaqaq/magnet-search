@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+Thumbs.db
+*.sample.html
+debug_output.txt
+test_score.mjs
+test_*.html

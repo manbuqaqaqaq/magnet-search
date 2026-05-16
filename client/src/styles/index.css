@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "DM Sans", system-ui, sans-serif;
+  --font-mono: "Share Tech Mono", monospace;
+  --color-signal: #00e5a0;
+  --color-alert: #f59e0b;
+  --color-warn: #ef4444;
+  --color-accent: #38bdf8;
+  --color-surface: #0b0d12;
+  --color-panel: #111318;
+  --color-border: #1e2128;
+  --color-muted: #5c6170;
+  --color-dim: #2a2d35;
+}
+
+/* === Base === */
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: #08090d;
+  color: #c8ccd4;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scanline overlay */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.025;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.15) 2px,
+    rgba(0, 0, 0, 0.15) 4px
+  );
+}
+
+/* Grid texture */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.03) 0%, transparent 60%),
+    radial-gradient(circle at 85% 100%, rgba(0, 229, 160, 0.02) 0%, transparent 50%);
+  background-size: 100% 100%, 100% 100%;
+}
+
+.light body {
+  background: #f4f5f7;
+  color: #1a1d24;
+}
+.light body::after { opacity: 0; }
+.light body::before { opacity: 0; }
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+/* === Scrollbar === */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a2d35; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3d45; }
+
+/* === Selection === */
+::selection {
+  background: rgba(56, 189, 248, 0.25);
+  color: #fff;
+}
+
+/* === Animations === */
+@keyframes scan-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes signal-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(56, 189, 248, 0); }
+}
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.animate-scan-in {
+  animation: scan-in 0.25s ease-out both;
+}
+.animate-fade {
+  animation: fade-in 0.2s ease-out both;
+}
+
+/* Light mode overrides */
+.light .bg-panel { background: #ffffff; }
+.light .border-panel { border-color: #e2e4e8; }
+.light .text-muted { color: #8a8f9a; }
+
+/* === Mobile Safe Areas === */
+.safe-top { padding-top: env(safe-area-inset-top, 0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* Larger touch targets on mobile */
+@media (max-width: 640px) {
+  .touch-manipulation { touch-action: manipulation; }
+
+  /* Prevent iOS zoom on input focus */
+  input[type="text"] { font-size: 16px !important; }
+
+  /* Scroll smooth for result lists */
+  .result-list { -webkit-overflow-scrolling: touch; }
+}
+
+/* === Mobile magnet action highlight === */
+@keyframes pulse-download {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 229, 160, 0.3); }
+  50% { box-shadow: 0 0 0 6px rgba(0, 229, 160, 0); }
+}
+.magnet-pulse {
+  animation: pulse-download 2s ease-in-out 1;
+}
