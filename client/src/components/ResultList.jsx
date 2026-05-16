@@ -3,7 +3,22 @@ import Skeleton from "./Skeleton.jsx";
 import EmptyState from "./EmptyState.jsx";
 import SourceStatus from "./SourceStatus.jsx";
 
-export default function ResultList({ status, error, results, onRetry, sourceCount, activeSources, onSourceToggle, query, selectedIndex }) {
+export default function ResultList({ status, error, results, onRetry, sourceCount, activeSources, onSourceToggle, query, selectedIndex, streaming }) {
+  // 流式加载中：已有部分结果，展示结果 + 底部骨架
+  if (status === "loading" && streaming && results?.results?.length > 0) {
+    return (
+      <div className="animate-fade">
+        <div className="space-y-2">
+          {results.results.map((r, i) => <ResultCard key={r.infoHash || i} result={r} index={i} query={query} selected={i === selectedIndex} />)}
+        </div>
+        <div className="flex items-center gap-2 mt-4 mb-2">
+          <div className="h-4 w-4 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
+          <span className="text-xs text-dim">更多数据源搜索中...</span>
+        </div>
+      </div>
+    );
+  }
+
   if (status === "loading") {
     return (
       <div className="animate-fade">

@@ -1,4 +1,4 @@
-import { aggregateSearch, SORT_FIELDS, getEnabledSources } from "../sources/index.js";
+import { aggregateSearch, aggregateSearchStream, SORT_FIELDS, getEnabledSources } from "../sources/index.js";
 
 export default async function searchRoute(fastify) {
   fastify.get("/api/search", {
@@ -40,6 +40,49 @@ export default async function searchRoute(fastify) {
         });
       }
     },
+  });
+
+  // SSE 流式搜索：每个源完成后即刻推送结果
+  fastify.get("/api/search/stream", async (req, reply) => {
+    const { q, sort = "relevance", page = 1, sources, minSize, maxSize, dateFrom, dateTo } = req.query;
+
+    const filters = {};
+    if (sources) filters.sources = sources.split(",").map((s) => s.trim()).filter(Boolean);
+    if (minSize != null) filters.minSize = Number(minSize);
+    if (maxSize != null) filters.maxSize = Number(maxSize);
+    if (dateFrom) filters.dateFrom = dateFrom;
+    if (dateTo) filters.dateTo = dateTo;
+
+    const res = reply.raw;
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+
+    try {
+      let lastSend = 0;
+      const result = await aggregateSearchStream(q, sort, page, filters, (evt) => {
+        // 节流：100ms 内最多发一次快照
+        const now = Date.now();
+        if (now - lastSend < 100) return;
+        lastSend = now;
+
+        res.write(`event: source\n`);
+        res.write(`data: ${JSON.stringify(evt)}\n\n`);
+      });
+
+      // 最终完整结果
+      res.write(`event: complete\n`);
+      res.write(`data: ${JSON.stringify(result)}\n\n`);
+    } catch (err) {
+      req.log.error(err);
+      res.write(`event: error\n`);
+      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+    } finally {
+      res.end();
+    }
   });
 
   fastify.get("/api/sources", async (_req, reply) => {

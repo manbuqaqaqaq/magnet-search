@@ -75,8 +75,11 @@ function parseResults(html) {
   return results;
 }
 
-export async function search(query, page = 1) {
-  const url = `${BASE}/search?q=${encodeURIComponent(query)}&p=${page - 1}`;
+// BTDigg 每页 10 条，并发取前 3 页（共 30 条），大幅提升中文资源覆盖
+const MAX_PAGES = 3;
+
+async function fetchPage(query, pageNum) {
+  const url = `${BASE}/search?q=${encodeURIComponent(query)}&p=${pageNum}`;
   const resp = await fetch(url, {
     headers: {
       "User-Agent":
@@ -85,8 +88,30 @@ export async function search(query, page = 1) {
     },
     signal: AbortSignal.timeout(15000),
   });
-
   if (!resp.ok) throw new Error(`btdig returned ${resp.status}`);
-  const html = await resp.text();
-  return parseResults(html);
+  return parseResults(await resp.text());
+}
+
+export async function search(query, page = 1) {
+  // 并发拉取前 MAX_PAGES 页
+  const pagePromises = [];
+  for (let i = 0; i < MAX_PAGES; i++) {
+    pagePromises.push(
+      fetchPage(query, i).catch(() => [])
+    );
+  }
+  const resultsArray = await Promise.all(pagePromises);
+
+  // 合并去重
+  const seen = new Set();
+  const merged = [];
+  for (const results of resultsArray) {
+    for (const r of results) {
+      if (!seen.has(r.infoHash)) {
+        seen.add(r.infoHash);
+        merged.push(r);
+      }
+    }
+  }
+  return merged;
 }

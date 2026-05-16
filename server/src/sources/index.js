@@ -85,35 +85,18 @@ export function getEnabledSources() {
   return config.sources.filter((s) => s.enabled).map((s) => s.name);
 }
 
-// 聚合搜索：并发请求所有源，合并去重排序
-export async function aggregateSearch(query, sortBy = "heat", page = 1, filters = {}) {
-  // 检查缓存 (仅缓存第 1 页，其他页靠排序结果分页)
-  const filterKey = JSON.stringify(filters);
-  const cacheKey = `${query}:${sortBy}:${filterKey}`;
-  if (page === 1) {
-    const cached = getCached(cacheKey);
-    if (cached) return { ...cached, cached: true };
-  }
-
-  if (registry.size === 0) await loadSources();
-  if (registry.size === 0) throw new Error("没有可用的搜索源");
-
-  // CJK 查询规范化 + 英文翻译（双路搜索）
+// 构建搜索任务列表
+function buildSearchTasks(query, page, filters, startTime) {
   const sourceQuery = normalizeQuery(query);
   const englishQuery = getEnglishQuery(query);
-
   const allowedSources = filters.sources?.length > 0 ? new Set(filters.sources) : null;
 
-  const startTime = Date.now();
-
-  // 收集源搜索任务：CJK + EN + 合并查询（DHT 引擎用合并查询匹配双语标题）
   const queries = [sourceQuery];
   if (englishQuery && englishQuery !== sourceQuery) {
     queries.push(englishQuery);
     queries.push(sourceQuery + " " + englishQuery);
   }
 
-  // 所有查询 × 所有源 并发请求
   const tasks = [];
   for (const q of queries) {
     for (const [name, searchFn] of registry) {
@@ -128,6 +111,24 @@ export async function aggregateSearch(query, sortBy = "heat", page = 1, filters 
       );
     }
   }
+  return { queries, sourceQuery, englishQuery, tasks };
+}
+
+// 聚合搜索：并发请求所有源，合并去重排序
+export async function aggregateSearch(query, sortBy = "heat", page = 1, filters = {}) {
+  // 检查缓存 (仅缓存第 1 页，其他页靠排序结果分页)
+  const filterKey = JSON.stringify(filters);
+  const cacheKey = `${query}:${sortBy}:${filterKey}`;
+  if (page === 1) {
+    const cached = getCached(cacheKey);
+    if (cached) return { ...cached, cached: true };
+  }
+
+  if (registry.size === 0) await loadSources();
+  if (registry.size === 0) throw new Error("没有可用的搜索源");
+
+  const startTime = Date.now();
+  const { queries, tasks } = buildSearchTasks(query, page, filters, startTime);
   const settled = await Promise.all(tasks);
 
   // 收集所有结果
@@ -190,6 +191,112 @@ export async function aggregateSearch(query, sortBy = "heat", page = 1, filters 
   }
 
   return result;
+}
+
+// 流式聚合搜索：每个源完成后立即回调，前端渐进渲染
+// onSource: ({ name, results, error, time, total }) => void
+export async function aggregateSearchStream(query, sortBy = "heat", page = 1, filters = {}, onSource) {
+  if (registry.size === 0) await loadSources();
+  if (registry.size === 0) throw new Error("没有可用的搜索源");
+
+  const startTime = Date.now();
+  const { queries, tasks } = buildSearchTasks(query, page, filters, startTime);
+
+  // 收集结果（逐步累积）
+  const allResults = [];
+  const sourceStatsMap = new Map();
+  const settledSources = new Set();
+
+  // 包装每个 task，完成时立即回调
+  const wrappedTasks = tasks.map((task) =>
+    task.then(({ name, results, query: q, error, time }) => {
+      // 累积结果
+      for (const r of results) allResults.push(r);
+      const prev = sourceStatsMap.get(name);
+      if (prev) {
+        prev.count += results?.length || 0;
+        if (!prev.error && error) prev.error = error;
+      } else {
+        sourceStatsMap.set(name, {
+          name,
+          count: results?.length || 0,
+          error: error || null,
+          time: time || 0,
+        });
+      }
+      settledSources.add(name);
+
+      // 实时回调：把该源的结果发出去，前端渐进渲染
+      if (onSource) {
+        // 快速去重 + 过滤 + 排序（仅对当前已累积的结果）
+        let snapshot = dedupe([...allResults]);
+        const scoringQueries = [query, ...queries];
+        snapshot = snapshot.filter((r) => {
+          for (const q of scoringQueries) {
+            if (relevanceScore(r.title, q) >= 10) return true;
+          }
+          return false;
+        });
+        let filtered = applyFilters(snapshot, filters);
+        let sorted = sortResults(filtered, sortBy, scoringQueries);
+        const pageSize = config.pageSize;
+        const paged = sorted.slice(0, pageSize);
+
+        onSource({
+          name,
+          count: results?.length || 0,
+          error: error || null,
+          time,
+          snapshot: {
+            total: sorted.length,
+            page: 1,
+            pageSize,
+            totalPages: Math.max(1, Math.ceil(sorted.length / pageSize)),
+            results: paged,
+            sources: [...settledSources].filter((s) => {
+              const st = sourceStatsMap.get(s);
+              return st && !st.error;
+            }),
+            sourceStats: [...sourceStatsMap.values()],
+            streaming: true,
+            pendingCount: tasks.length - settledSources.size * (queries.length || 1),
+          },
+        });
+      }
+
+      return { name, results, query: q, error, time };
+    })
+  );
+
+  await Promise.all(wrappedTasks);
+
+  // 最终结果（完整去重排序分页）
+  let unique = dedupe(allResults);
+  const scoringQueries = [query, ...queries];
+  unique = unique.filter((r) => {
+    for (const q of scoringQueries) {
+      if (relevanceScore(r.title, q) >= 10) return true;
+    }
+    return false;
+  });
+  unique = applyFilters(unique, filters);
+  const sorted = sortResults(unique, sortBy, scoringQueries);
+  const pageSize = config.pageSize;
+  const start = (page - 1) * pageSize;
+  const paged = sorted.slice(start, start + pageSize);
+
+  return {
+    total: sorted.length,
+    page,
+    pageSize,
+    totalPages: Math.ceil(sorted.length / pageSize),
+    results: paged,
+    sources: [...new Set([...sourceStatsMap.keys()].filter((s) => !sourceStatsMap.get(s)?.error))],
+    sourceStats: [...sourceStatsMap.values()],
+    totalTime: Date.now() - startTime,
+    queries,
+    streaming: false,
+  };
 }
 
 export { SORT_FIELDS };

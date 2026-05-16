@@ -6,7 +6,7 @@ import ThemeToggle from "./components/ThemeToggle.jsx";
 import Pagination from "./components/Pagination.jsx";
 import FilterBar from "./components/FilterBar.jsx";
 import FavoritesList from "./components/FavoritesList.jsx";
-import { search, fetchSources } from "./api.js";
+import { search, searchStream, fetchSources } from "./api.js";
 import { addToHistory } from "./components/SearchHistory.jsx";
 
 function readParams() {
@@ -35,6 +35,9 @@ export default function App() {
   const [showFavorites, setShowFavorites] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [sourceProgress, setSourceProgress] = useState(null); // { name: "loading"|"done"|"error", count, time }
+  const [streamingResults, setStreamingResults] = useState(null); // 流式中间结果
+  const streamRef = useRef(null);
   const inputRef = useRef(null);
   const hasSearched = useRef(false);
   const resultsContainerRef = useRef(null);
@@ -54,9 +57,45 @@ export default function App() {
   useEffect(() => { if (!hasSearched.current) return; inputRef.current?.focus(); }, []);
 
   const doSearch = useCallback(async (q, s, p = 1, f = filters) => {
-    setStatus("loading"); setError(""); setResults(null); setSelectedIndex(-1); writeParams(q, s, p);
-    try { const data = await search({ q, sort: s, page: p, filters: f }); setResults(data); setStatus("done"); addToHistory(q); }
-    catch (err) { setError(err.message); setStatus("error"); }
+    setStatus("loading"); setError(""); setResults(null);
+    setStreamingResults(null); setSourceProgress({}); setSelectedIndex(-1);
+    writeParams(q, s, p);
+
+    // 清理上次流
+    streamRef.current?.close();
+
+    try {
+      streamRef.current = searchStream(
+        { q, sort: s, page: p, filters: f },
+        {
+          onSource: (evt) => {
+            setSourceProgress((prev) => ({
+              ...prev,
+              [evt.name]: { status: evt.error ? "error" : "done", count: evt.count, time: evt.time },
+            }));
+            if (evt.snapshot) setStreamingResults(evt.snapshot);
+          },
+          onComplete: (data) => {
+            setResults(data);
+            setStatus("done");
+            addToHistory(q);
+            setStreamingResults(null);
+            setSourceProgress(null);
+          },
+          onError: (err) => {
+            setError(err.error || "连接中断");
+            setStatus("error");
+            setStreamingResults(null);
+            setSourceProgress(null);
+          },
+        }
+      );
+    } catch (err) {
+      setError(err.message);
+      setStatus("error");
+      setStreamingResults(null);
+      setSourceProgress(null);
+    }
   }, [filters]);
 
   const handleSubmit = useCallback((e) => {
@@ -183,8 +222,41 @@ export default function App() {
 
         {status !== "idle" && (
           <>
-            <SortTabs active={sort} onChange={handleSortChange} count={results?.total} />
-            <ResultList status={status} error={error} results={results} onRetry={handleSubmit} sourceCount={availableSources.length} activeSources={filters.sources} onSourceToggle={handleSourceToggle} query={query} selectedIndex={selectedIndex} />
+            <SortTabs active={sort} onChange={handleSortChange} count={(streamingResults || results)?.total} />
+            {/* 源加载状态条 */}
+            {sourceProgress && Object.keys(sourceProgress).length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 mb-4">
+                {Object.entries(sourceProgress).map(([src, info]) => (
+                  <span
+                    key={src}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium border transition-all ${
+                      info.status === "done"
+                        ? "bg-signal/5 border-signal/20 text-signal"
+                        : info.status === "error"
+                        ? "bg-alert/5 border-alert/20 text-alert"
+                        : "bg-dim/10 border-dim/20 text-dim animate-pulse"
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${info.status === "done" ? "bg-signal" : info.status === "error" ? "bg-alert" : "bg-dim animate-ping"}`} />
+                    {src}
+                    {info.count > 0 && <span className="opacity-70">{info.count}条</span>}
+                    {info.status === "error" && <span className="opacity-70">失败</span>}
+                  </span>
+                ))}
+              </div>
+            )}
+            <ResultList
+              status={status}
+              error={error}
+              results={streamingResults || results}
+              onRetry={handleSubmit}
+              sourceCount={availableSources.length}
+              activeSources={filters.sources}
+              onSourceToggle={handleSourceToggle}
+              query={query}
+              selectedIndex={selectedIndex}
+              streaming={!!streamingResults}
+            />
             {status === "done" && results && <Pagination page={results.page} totalPages={results.totalPages} onPageChange={handlePageChange} />}
           </>
         )}
