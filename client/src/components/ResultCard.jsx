@@ -3,6 +3,9 @@ import CopyButton from "./CopyButton.jsx";
 import { isFavorite, addFavorite, removeFavorite } from "./FavoritesManager.jsx";
 import { detectFileType } from "./fileTypes.js";
 
+const PLAYER_CENTER_URL = import.meta.env.VITE_PLAYER_CENTER_URL ||
+  `${window.location.protocol}//${window.location.hostname}:8787`;
+
 const SOURCE_COLORS = {
   tpb: "#38bdf8", hiddenbay: "#38bdf8",
   torrentz2: "#a78bfa", knaben: "#f59e0b",
@@ -113,7 +116,23 @@ export default function ResultCard({ result, index, query, selected }) {
         </div>
 
         {/* 操作按钮区 — 移动端全宽 */}
-        <CopyButton text={magnet} title={title} />
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* 播放按钮 — 跳转到磁力播放中心 */}
+          <a
+            href={`${PLAYER_CENTER_URL}/?magnet=${encodeURIComponent(magnet)}&autostart=1`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 h-10 sm:h-7 px-3 sm:px-2.5 flex items-center gap-1.5 rounded-lg sm:rounded text-sm sm:text-xs font-semibold transition-all duration-200 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 active:scale-95 touch-manipulation"
+            title="在播放中心边下边播"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" className="sm:w-3.5 sm:h-3.5">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            <span className="hidden sm:inline">播放</span>
+            <span className="sm:hidden text-[13px]">播放</span>
+          </a>
+          <CopyButton text={magnet} title={title} />
+        </div>
       </div>
     </div>
   );
